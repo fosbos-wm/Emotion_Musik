@@ -236,8 +236,15 @@
         const target = added ? CATEGORIES.findIndex(c => c.id === added.doc.data().category) : -1;
         if (target >= 0) show(target, true);
         else renderCategory();
-      }, () => {
-        showNotice("Keine Verbindung zur Datenbank. Prüf die Internetverbindung und die Einstellungen in config.js.");
+      }, err => {
+        console.error(err);
+        const reasons = {
+          "permission-denied": "Die Firestore-Regeln erlauben das Lesen nicht. Regeln aus firestore.rules in der Firebase-Konsole unter Firestore Database → Regeln einfügen und veröffentlichen.",
+          "not-found": "Es gibt keine Firestore-Datenbank mit dem Namen (default). In der Firebase-Konsole unter Firestore Database eine Datenbank anlegen.",
+          "failed-precondition": "Firestore ist für dieses Projekt noch nicht eingerichtet oder läuft im falschen Modus.",
+          "unavailable": "Firebase ist nicht erreichbar. Möglicherweise blockiert das Netzwerk oder ein Werbeblocker die Verbindung."
+        };
+        showNotice(`Keine Verbindung zur Datenbank (${err.code}). ${reasons[err.code] || err.message}`);
         if (firstLoad) { firstLoad = false; show(0, false); }
       });
     }
