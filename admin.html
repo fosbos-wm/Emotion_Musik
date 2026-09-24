@@ -1,0 +1,165 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>switch – Verwaltung</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎧</text></svg>">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@500;700;800&family=Figtree:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #141519; --surface: #1e1f26; --line: #33343d; --text: #f4f2ef; --muted: #a3a2ad; --error: #ff6b78;
+    --display: 'Unbounded', system-ui, sans-serif; --body: 'Figtree', system-ui, sans-serif;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--text); font-family: var(--body); line-height: 1.5; }
+  .wrap { max-width: 52rem; margin: 0 auto; padding: 1.5rem 1.25rem 4rem; }
+  header { display: flex; align-items: center; gap: .9rem; margin-bottom: 2rem; }
+  .wordmark { font-family: var(--display); font-weight: 700; font-size: 1.4rem; letter-spacing: -.02em; }
+  .role { color: var(--muted); }
+  header button { margin-left: auto; }
+
+  h1 { font-family: var(--display); font-weight: 800; font-size: 1.8rem; letter-spacing: -.03em; margin-bottom: 1.25rem; }
+  h2 { font-family: var(--display); font-weight: 700; font-size: 1.2rem; color: var(--c); margin: 2.25rem 0 .75rem; }
+  label { display: block; font-weight: 600; margin-bottom: 1rem; }
+  input { display: block; width: 100%; margin-top: .4rem; font: inherit; color: var(--text); background: var(--surface);
+    border: 2px solid var(--line); border-radius: .8rem; padding: .75rem .9rem; }
+  input:focus-visible { outline: none; border-color: var(--text); }
+  button { font: inherit; font-weight: 600; cursor: pointer; border-radius: .7rem; padding: .6rem 1rem;
+    border: 2px solid var(--line); background: transparent; color: var(--text); }
+  button.primary { background: var(--text); color: var(--bg); border-color: var(--text); font-family: var(--display); padding: .85rem 1.4rem; }
+  button.del:hover, button.del:focus-visible { border-color: var(--error); color: var(--error); }
+  button:focus-visible { outline: 3px solid var(--text); outline-offset: 2px; }
+  .error { color: var(--error); min-height: 1.5rem; margin-bottom: .75rem; }
+  .login { max-width: 24rem; }
+
+  .summary { color: var(--muted); }
+  .row { display: grid; grid-template-columns: 3.5rem 1fr auto; gap: 1rem; align-items: center;
+    padding: .6rem; border-radius: .9rem; background: var(--surface); margin-bottom: .5rem; }
+  .row.archived { opacity: .55; }
+  .row img { width: 3.5rem; height: 3.5rem; object-fit: cover; border-radius: .5rem; }
+  .row a { color: var(--text); font-weight: 600; text-decoration: none; }
+  .row a:hover { text-decoration: underline; }
+  .meta { color: var(--muted); font-size: .88rem; }
+  .none { color: var(--muted); }
+  .uid { color: var(--muted); font-size: .85rem; margin-top: 3rem; word-break: break-all; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <span class="wordmark">switch</span>
+    <span class="role">Verwaltung</span>
+    <button id="logout" hidden>Abmelden</button>
+  </header>
+
+  <section id="loginView" class="login" hidden>
+    <h1>Anmelden</h1>
+    <form id="loginForm">
+      <label>E-Mail<input type="email" id="email" autocomplete="username" required></label>
+      <label>Passwort<input type="password" id="pw" autocomplete="current-password" required></label>
+      <p class="error" id="loginError" role="alert"></p>
+      <button class="primary" type="submit">Anmelden</button>
+    </form>
+  </section>
+
+  <section id="listView" hidden>
+    <h1>Eingereichte Songs</h1>
+    <p class="summary" id="summary"></p>
+    <p class="error" id="listError" role="alert"></p>
+    <div id="groups"></div>
+    <p class="uid" id="uid"></p>
+  </section>
+</div>
+
+<script type="module">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+  import { getAuth, signInWithEmailAndPassword, onAuthStateChanged, signOut }
+    from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+  import { getFirestore, collection, query, orderBy, onSnapshot, deleteDoc, doc }
+    from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+  import { firebaseConfig, CATEGORIES, SLOTS_PER_CATEGORY } from "./config.js";
+
+  const $ = id => document.getElementById(id);
+  const esc = s => String(s ?? "").replace(/[&<>"']/g, c =>
+    ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+
+  const app = initializeApp(firebaseConfig);
+  const auth = getAuth(app);
+  const db = getFirestore(app);
+  let unsubscribe = null;
+  let songsById = {};
+
+  $("loginForm").addEventListener("submit", async e => {
+    e.preventDefault();
+    $("loginError").textContent = "";
+    try {
+      await signInWithEmailAndPassword(auth, $("email").value.trim(), $("pw").value);
+    } catch {
+      $("loginError").textContent = "Anmeldung fehlgeschlagen. Prüf E-Mail und Passwort.";
+    }
+  });
+  $("logout").addEventListener("click", () => signOut(auth));
+
+  onAuthStateChanged(auth, user => {
+    $("loginView").hidden = !!user;
+    $("listView").hidden = !user;
+    $("logout").hidden = !user;
+    if (unsubscribe) { unsubscribe(); unsubscribe = null; }
+    if (!user) return;
+
+    $("uid").textContent = `Angemeldet als ${user.email}. Deine UID (muss in firestore.rules stehen): ${user.uid}`;
+    const q = query(collection(db, "songs"), orderBy("createdAt", "desc"));
+    unsubscribe = onSnapshot(q, render, () => {
+      $("listError").textContent = "Die Songs konnten nicht geladen werden. Prüf die Internetverbindung.";
+    });
+  });
+
+  function render(snap) {
+    songsById = {};
+    const groups = Object.fromEntries(CATEGORIES.map(c => [c.id, []]));
+    snap.forEach(d => {
+      const s = { id: d.id, ...d.data() };
+      songsById[s.id] = s;
+      if (groups[s.category]) groups[s.category].push(s);
+    });
+    $("summary").textContent = `${snap.size} Songs insgesamt. Pro Kategorie sind die neuesten ${SLOTS_PER_CATEGORY} auf dem Bildschirm.`;
+
+    $("groups").innerHTML = CATEGORIES.map(c => {
+      const list = groups[c.id];
+      const rows = list.length ? list.map((s, i) => {
+        const when = s.createdAt ? s.createdAt.toDate().toLocaleString("de-DE", { dateStyle: "short", timeStyle: "short" }) : "gerade eben";
+        const status = i < SLOTS_PER_CATEGORY ? "auf dem Bildschirm" : "nicht mehr sichtbar";
+        return `<div class="row ${i < SLOTS_PER_CATEGORY ? "" : "archived"}">
+          <img src="${esc(s.cover)}" alt="">
+          <div>
+            <a href="${esc(s.url)}" target="_blank" rel="noopener">${esc(s.title)}</a>
+            <div class="meta">von ${esc(s.nickname)}, ${when}, ${status}</div>
+          </div>
+          <button class="del" data-id="${esc(s.id)}">Löschen</button>
+        </div>`;
+      }).join("") : `<p class="none">Noch keine Songs.</p>`;
+      return `<h2 style="--c:${c.color}">${esc(c.name)}</h2>${rows}`;
+    }).join("");
+  }
+
+  $("groups").addEventListener("click", async e => {
+    const btn = e.target.closest("button.del");
+    if (!btn) return;
+    const s = songsById[btn.dataset.id];
+    if (!s || !confirm(`„${s.title}“ von ${s.nickname} löschen?`)) return;
+    $("listError").textContent = "";
+    try {
+      await deleteDoc(doc(db, "songs", s.id));
+    } catch (err) {
+      $("listError").textContent = err.code === "permission-denied"
+        ? "Löschen nicht erlaubt: Deine UID (unten auf der Seite) steht noch nicht in firestore.rules."
+        : "Löschen hat nicht geklappt. Versuch es noch mal.";
+    }
+  });
+</script>
+</body>
+</html>

@@ -1,0 +1,31 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Hier die UID deines Admin-Kontos eintragen (steht nach dem Login unten auf admin.html).
+    function isAdmin() {
+      return request.auth != null && request.auth.uid in ['ADMIN_UID_HIER'];
+    }
+
+    function isValidSong(d) {
+      let fields = ['category', 'nickname', 'trackId', 'url', 'title', 'cover', 'noExplicit', 'createdAt'];
+      return d.keys().hasOnly(fields) && d.keys().hasAll(fields)
+        && d.category in ['focus', 'hype', 'chill', 'brave', 'comfort', 'goodvibes']
+        && d.trackId is string && d.trackId.matches('^[A-Za-z0-9]{22}$')
+        && d.url == 'https://open.spotify.com/track/' + d.trackId
+        && d.title is string && d.title.size() > 0 && d.title.size() <= 300
+        && d.cover is string && d.cover.size() <= 500
+        && d.cover.matches('^https://[a-z0-9.-]+[.](scdn[.]co|spotifycdn[.]com)/.*')
+        && d.nickname is string && d.nickname.size() > 0 && d.nickname.size() <= 60
+        && d.noExplicit == true
+        && d.createdAt == request.time;
+    }
+
+    match /songs/{songId} {
+      allow read: if true;                                   // Aula-Bildschirm liest ohne Login
+      allow create: if isValidSong(request.resource.data);   // Einreichen ohne Login, aber nur gültige Einträge
+      allow update: if false;                                // Einträge werden nie verändert
+      allow delete: if isAdmin();                            // Nur du kannst löschen
+    }
+  }
+}
