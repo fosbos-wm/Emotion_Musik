@@ -2,12 +2,12 @@
 // Hier trägst du deine Firebase-Daten ein. Alles andere kannst du so lassen oder anpassen.
 
 export const firebaseConfig = {
-  apiKey: "DEIN_API_KEY",
-  authDomain: "DEIN_PROJEKT.firebaseapp.com",
-  projectId: "DEIN_PROJEKT",
-  storageBucket: "DEIN_PROJEKT.appspot.com",
-  messagingSenderId: "DEINE_SENDER_ID",
-  appId: "DEINE_APP_ID"
+  apiKey: "AIzaSyDbIsFJZJJaKjQ6SoT5cPH9k_cMDNg9Qbc",
+  authDomain: "emotion-und-musik.firebaseapp.com",
+  projectId: "emotion-und-musik",
+  storageBucket: "emotion-und-musik.firebasestorage.app",
+  messagingSenderId: "793766090477",
+  appId: "1:793766090477:web:fea2c91c0402fb69741ee4"
 };
 
 export const ROTATION_SECONDS = 15;       // Anzeigedauer pro Kategorie im Aula-Modus
