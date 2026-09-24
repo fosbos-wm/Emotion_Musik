@@ -67,6 +67,12 @@
       box-shadow: 0 0 0 .4vh var(--accent), 0 4vh 11vh -1vh color-mix(in srgb, var(--accent) 70%, transparent); }
   }
 
+  .song-qr { position: absolute; top: 2vh; right: 2vh; background: #fff; color: #141519; border-radius: 1.2vh;
+    padding: 1vh 1vh .7vh; display: flex; flex-direction: column; align-items: center; gap: .5vh;
+    font-size: 1.5vh; font-weight: 600; box-shadow: 0 1vh 3vh rgba(0,0,0,.35); }
+  .song-qr-code { width: 13vh; }
+  .song-qr-code img, .song-qr-code canvas { display: block; width: 100% !important; height: auto !important; }
+
   .smalls { display: grid; grid-template-columns: repeat(2, 25vh); grid-template-rows: repeat(2, 25vh); gap: 2vh; flex: none; }
 
   .empty { background: transparent; border: .3vh dashed color-mix(in srgb, var(--accent) 55%, transparent);
@@ -119,8 +125,8 @@
         <div class="smalls" id="smalls"></div>
         <aside class="join">
           <div class="qr" id="qr"></div>
-          <p class="join-title">Dein Song für diese Stimmung?</p>
-          <p class="join-text">Code scannen, Spotify-Link einfügen, fertig. Ohne Anmeldung.</p>
+          <p class="join-title">Deinen Song teilen?</p>
+          <p class="join-text">Diesen Code scannen, Spotify-Link einfügen, fertig. Ohne Anmeldung.</p>
         </aside>
       </div>
     </main>
@@ -164,6 +170,7 @@
     function tileHTML(song, extraClass) {
       return `<div class="tile ${extraClass}">
         <img src="${esc(song.cover)}" alt="">
+        ${extraClass === "hero" ? `<div class="song-qr"><div class="song-qr-code" id="heroQr"></div><span>Scannen und anhören</span></div>` : ""}
         <div class="cap"><span class="t">${esc(song.title)}</span><span class="n">von ${esc(song.nickname)}</span></div>
       </div>`;
     }
@@ -178,6 +185,10 @@
       $("heroSlot").innerHTML = newest
         ? tileHTML(newest, "hero")
         : `<div class="tile hero empty">Noch kein Song für ${esc(cat.name)}. Scann den Code und teil den ersten.</div>`;
+      if (newest && window.QRCode) {
+        new QRCode($("heroQr"), { text: newest.url, width: 256, height: 256,
+          colorDark: "#141519", colorLight: "#ffffff", correctLevel: QRCode.CorrectLevel.M });
+      }
 
       let smalls = "";
       for (let i = 0; i < SLOTS_PER_CATEGORY - 1; i++) {
