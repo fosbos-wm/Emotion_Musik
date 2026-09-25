@@ -73,6 +73,11 @@
   .song-qr-code { width: 13vh; }
   .song-qr-code img, .song-qr-code canvas { display: block; width: 100% !important; height: auto !important; }
 
+  #heroSlot { transition: opacity .35s ease; }
+  #heroSlot.out { opacity: 0; }
+  .smalls .tile { transition: box-shadow .35s ease; }
+  .smalls .tile.active { box-shadow: 0 0 0 .4vh var(--accent); }
+
   .smalls { display: grid; grid-template-columns: repeat(2, 25vh); grid-template-rows: repeat(2, 25vh); gap: 2vh; flex: none; }
 
   .empty { background: transparent; border: .3vh dashed color-mix(in srgb, var(--accent) 55%, transparent);
@@ -97,7 +102,7 @@
 
   @media (prefers-reduced-motion: reduce) {
     .hero { animation: none; }
-    .main { transition: none; }
+    .main, #heroSlot { transition: none; }
     .timer-bar.run { animation: none; transform: scaleX(1); }
   }
 </style>
@@ -141,7 +146,7 @@
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
     import { getFirestore, collection, query, orderBy, limit, onSnapshot }
       from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
-    import { firebaseConfig, CATEGORIES, ROTATION_SECONDS, SLOTS_PER_CATEGORY, isConfigured } from "./config.js";
+    import { firebaseConfig, CATEGORIES, SONG_SECONDS, SLOTS_PER_CATEGORY, isConfigured } from "./config.js";
 
     const $ = id => document.getElementById(id);
     const esc = s => String(s ?? "").replace(/[&<>"']/g, c =>
@@ -150,7 +155,8 @@
     const submitUrl = new URL("einreichen.html", location.href).href;
 
     let byCat = Object.fromEntries(CATEGORIES.map(c => [c.id, []]));
-    let index = 0;
+    let index = 0;          // aktuelle Kategorie
+    let spot = 0;           // welcher Song der Kategorie gerade groß gezeigt wird
     let rotationTimer = null;
     let firstLoad = true;
 
@@ -175,45 +181,81 @@
       </div>`;
     }
 
+    const currentSongs = () => byCat[CATEGORIES[index].id] || [];
+
+    function renderHero() {
+      const cat = CATEGORIES[index];
+      const songs = currentSongs();
+      if (spot >= songs.length) spot = 0;
+      const song = songs[spot];
+
+      $("heroSlot").innerHTML = song
+        ? tileHTML(song, "hero")
+        : `<div class="tile hero empty">Noch kein Song für ${esc(cat.name)}. Scann den Code und teil den ersten.</div>`;
+      if (song && window.QRCode) {
+        new QRCode($("heroQr"), { text: song.url, width: 256, height: 256,
+          colorDark: "#141519", colorLight: "#ffffff", correctLevel: QRCode.CorrectLevel.M });
+      }
+      $("backdrop").style.backgroundImage = song ? `url(${JSON.stringify(song.cover)})` : "none";
+
+      // Der gerade groß gezeigte Song wird auch in der kleinen Reihe markiert
+      document.querySelectorAll("#smalls .tile").forEach((el, i) => el.classList.toggle("active", i === spot - 1));
+    }
+
     function renderCategory() {
       const cat = CATEGORIES[index];
       document.documentElement.style.setProperty("--accent", cat.color);
       $("catName").textContent = cat.name;
       $("catLine").textContent = cat.line;
 
-      const [newest, ...rest] = byCat[cat.id] || [];
-      $("heroSlot").innerHTML = newest
-        ? tileHTML(newest, "hero")
-        : `<div class="tile hero empty">Noch kein Song für ${esc(cat.name)}. Scann den Code und teil den ersten.</div>`;
-      if (newest && window.QRCode) {
-        new QRCode($("heroQr"), { text: newest.url, width: 256, height: 256,
-          colorDark: "#141519", colorLight: "#ffffff", correctLevel: QRCode.CorrectLevel.M });
-      }
-
+      // Kleine Kacheln: Songs 2 bis 5 in fester Reihenfolge (neueste zuerst)
+      const rest = currentSongs().slice(1);
       let smalls = "";
       for (let i = 0; i < SLOTS_PER_CATEGORY - 1; i++) {
         smalls += rest[i] ? tileHTML(rest[i], "") : `<div class="tile empty">Platz frei</div>`;
       }
       $("smalls").innerHTML = smalls;
 
-      $("backdrop").style.backgroundImage = newest ? `url(${JSON.stringify(newest.cover)})` : "none";
-
       document.querySelectorAll("#strip span").forEach(el => el.classList.toggle("on", el.dataset.id === cat.id));
       if (qr) qr.makeCode(`${submitUrl}?k=${cat.id}`);
+      renderHero();
     }
 
-    function restartTimer() {
+    function swapHero() {
+      if (reducedMotion) { renderHero(); return; }
+      $("heroSlot").classList.add("out");
+      setTimeout(() => { renderHero(); $("heroSlot").classList.remove("out"); }, 350);
+    }
+
+    // Alle SONG_SECONDS: nächster Song der Kategorie, nach dem letzten die nächste Kategorie
+    function schedule() {
       clearTimeout(rotationTimer);
-      rotationTimer = setTimeout(() => show((index + 1) % CATEGORIES.length), ROTATION_SECONDS * 1000);
+      rotationTimer = setTimeout(step, SONG_SECONDS * 1000);
+    }
+
+    function step() {
+      if (spot + 1 < currentSongs().length) {
+        spot++;
+        swapHero();
+        schedule();
+      } else {
+        show((index + 1) % CATEGORIES.length);
+      }
+    }
+
+    // Fortschrittsbalken oben rechts läuft über die ganze Kategorie
+    function startBar() {
+      const seconds = Math.max(1, currentSongs().length) * SONG_SECONDS;
       const bar = $("timerBar");
-      bar.style.setProperty("--dur", `${ROTATION_SECONDS}s`);
+      bar.style.setProperty("--dur", `${seconds}s`);
       bar.classList.remove("run");
-      void bar.offsetWidth; // Animation neu starten
+      void bar.offsetWidth;
       bar.classList.add("run");
     }
 
     function show(i, animate = true) {
       index = i;
+      spot = 0;
       const main = $("main");
       if (animate && !reducedMotion) {
         main.classList.add("out");
@@ -221,7 +263,8 @@
       } else {
         renderCategory();
       }
-      restartTimer();
+      startBar();
+      schedule();
     }
 
     if (!isConfigured()) {

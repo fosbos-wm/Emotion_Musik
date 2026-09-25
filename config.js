@@ -10,7 +10,7 @@ export const firebaseConfig = {
   appId: "1:793766090477:web:fea2c91c0402fb69741ee4"
 };
 
-export const ROTATION_SECONDS = 15;       // Anzeigedauer pro Kategorie im Aula-Modus
+export const SONG_SECONDS = 5;            // Anzeigedauer pro Song (groß, mit QR-Code); eine Kategorie läuft 5 s × Anzahl Songs
 export const SLOTS_PER_CATEGORY = 5;      // 1 große + 4 kleine Kacheln
 export const SUBMIT_COOLDOWN_SECONDS = 60; // Wartezeit zwischen zwei Einreichungen vom selben Handy
 
