@@ -157,6 +157,7 @@
     let byCat = Object.fromEntries(CATEGORIES.map(c => [c.id, []]));
     let index = 0;          // aktuelle Kategorie
     let spot = 0;           // welcher Song der Kategorie gerade groß gezeigt wird
+    let tick = 0;           // wievielter 5-Sekunden-Abschnitt der Kategorie (0 bis 4)
     let rotationTimer = null;
     let firstLoad = true;
 
@@ -227,25 +228,28 @@
       setTimeout(() => { renderHero(); $("heroSlot").classList.remove("out"); }, 350);
     }
 
-    // Alle SONG_SECONDS: nächster Song der Kategorie, nach dem letzten die nächste Kategorie
+    // Jede Kategorie läuft immer SLOTS_PER_CATEGORY × SONG_SECONDS (5 × 5 s = 25 s).
+    // Alle 5 Sekunden kommt der nächste Song; bei weniger als 5 Songs geht es wieder von vorne los.
     function schedule() {
       clearTimeout(rotationTimer);
       rotationTimer = setTimeout(step, SONG_SECONDS * 1000);
     }
 
     function step() {
-      if (spot + 1 < currentSongs().length) {
-        spot++;
-        swapHero();
-        schedule();
-      } else {
+      tick++;
+      if (tick >= SLOTS_PER_CATEGORY) {
         show((index + 1) % CATEGORIES.length);
+        return;
       }
+      const count = currentSongs().length;
+      const nextSpot = count ? tick % count : 0;
+      if (nextSpot !== spot) { spot = nextSpot; swapHero(); }
+      schedule();
     }
 
     // Fortschrittsbalken oben rechts läuft über die ganze Kategorie
     function startBar() {
-      const seconds = Math.max(1, currentSongs().length) * SONG_SECONDS;
+      const seconds = SLOTS_PER_CATEGORY * SONG_SECONDS;
       const bar = $("timerBar");
       bar.style.setProperty("--dur", `${seconds}s`);
       bar.classList.remove("run");
@@ -256,6 +260,7 @@
     function show(i, animate = true) {
       index = i;
       spot = 0;
+      tick = 0;
       const main = $("main");
       if (animate && !reducedMotion) {
         main.classList.add("out");
